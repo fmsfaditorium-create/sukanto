@@ -33,3 +33,12 @@ export interface UserSession {
   lastActive: number;
   id: string;
 }
+
+export interface Complaint {
+  id: string;
+  userName: string;
+  userMobile: string;
+  userEmail?: string;
+  message: string;
+  timestamp: number;
+}

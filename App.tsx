@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Category, ContentItem, CategoryType, UserSession } from './types';
+import { Category, ContentItem, CategoryType, UserSession, Complaint } from './types';
 import { CONTENT_DATA, APP_NAME, DEFAULT_CATEGORIES } from './constants';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -10,7 +10,8 @@ import AdminPanel from './components/AdminPanel';
 import { 
   ChevronLeft, Share2, Printer, Bookmark, Search, BookOpen, 
   UserCircle, ArrowRight, Phone, ShieldCheck, Loader2, X, 
-  LogOut, CheckCircle, Smartphone, Monitor, Info, MapPin
+  LogOut, CheckCircle, Smartphone, Monitor, Info, MapPin, 
+  MessageSquareWarning, Send, Mail
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -40,6 +41,20 @@ const App: React.FC = () => {
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [sessionId] = useState(() => Math.random().toString(36).substring(7));
 
+  // Complaint state
+  const [complaintText, setComplaintText] = useState('');
+  const [complaintMobile, setComplaintMobile] = useState(visitorMobile || '');
+  const [complaintEmail, setComplaintEmail] = useState('');
+  const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
+  const [complaintSuccess, setComplaintSuccess] = useState(false);
+
+  // Sync complaint mobile with visitor mobile when verified
+  useEffect(() => {
+    if (visitorMobile && !complaintMobile) {
+      setComplaintMobile(visitorMobile);
+    }
+  }, [visitorMobile]);
+
   // Function to load data from storage
   const loadData = () => {
     const savedCategories = localStorage.getItem('shikkhok_categories');
@@ -56,7 +71,6 @@ const App: React.FC = () => {
     localStorage.setItem('shikkhok_categories', JSON.stringify(updatedCats));
   };
 
-  // Improved device detection
   const getDeviceInfo = () => {
     const ua = navigator.userAgent;
     let device = "Desktop PC";
@@ -74,7 +88,6 @@ const App: React.FC = () => {
     return `${device} (${browser})`;
   };
 
-  // Fetch location (still required for Admin tracking)
   const fetchLocation = () => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -107,7 +120,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [isVerified]);
 
-  // Track active sessions and sync with localStorage for Admin visibility
   useEffect(() => {
     if (!visitorName || !visitorMobile || !isVerified) return;
 
@@ -163,7 +175,7 @@ const App: React.FC = () => {
     e.preventDefault();
     if (otpInput === '1234') { 
       setIsVerifying(true);
-      fetchLocation(); // Still fetch location to send to admin
+      fetchLocation(); 
       setTimeout(() => {
         localStorage.setItem('shikkhok_visitor_name', tempName.trim());
         localStorage.setItem('shikkhok_visitor_mobile', tempMobile.trim());
@@ -194,6 +206,40 @@ const App: React.FC = () => {
     setVisitorLocation(null);
     setShowProfileModal(false);
     setViewingItemId(null);
+  };
+
+  const handleSubmitComplaint = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!complaintText.trim() || (!complaintMobile.trim() && !complaintEmail.trim())) {
+      alert('অনুগ্রহ করে আপনার অভিযোগ এবং অন্তত একটি যোগাযোগের মাধ্যম (মোবাইল বা ইমেইল) প্রদান করুন।');
+      return;
+    }
+
+    setIsSubmittingComplaint(true);
+    
+    setTimeout(() => {
+      const savedComplaints = localStorage.getItem('shikkhok_complaints');
+      const complaints: Complaint[] = savedComplaints ? JSON.parse(savedComplaints) : [];
+      
+      const newComplaint: Complaint = {
+        id: `comp-${Date.now()}`,
+        userName: visitorName || 'অপরিচিত ইউজার',
+        userMobile: complaintMobile || visitorMobile || 'নেই',
+        userEmail: complaintEmail || undefined,
+        message: complaintText,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('shikkhok_complaints', JSON.stringify([...complaints, newComplaint]));
+      
+      setIsSubmittingComplaint(false);
+      setComplaintText('');
+      setComplaintEmail('');
+      // Keep mobile as it might be visitor's default
+      setComplaintSuccess(true);
+      
+      setTimeout(() => setComplaintSuccess(false), 3000);
+    }, 1000);
   };
 
   const isUserAuthorized = isLoggedIn || (!!visitorName && !!visitorMobile && isVerified);
@@ -387,6 +433,74 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Complaint Box Section */}
+        {!isAdminMode && (
+          <section className="mt-20 max-w-2xl mx-auto pb-10">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+              <div className="bg-slate-900 p-6 text-white flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-blue-600 p-2 rounded-xl">
+                    <MessageSquareWarning className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">অভিযোগ বা মতামত</h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">আপনার কথা আমাদের জানান</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-8">
+                {complaintSuccess ? (
+                  <div className="flex flex-col items-center justify-center py-6 animate-in zoom-in">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                      <CheckCircle className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-800">ধন্যবাদ!</h4>
+                    <p className="text-slate-500 text-center">আপনার অভিযোগটি সফলভাবে জমা হয়েছে।</p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitComplaint} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="relative">
+                        <input 
+                          type="tel" 
+                          placeholder="মোবাইল নম্বর"
+                          className="w-full pl-20 pr-4 py-3.5 bg-slate-100 border-2 border-slate-500 rounded-3xl focus:border-blue-500 outline-none transition-all font-bold text-slate-700"
+                          value={complaintMobile}
+                          onChange={(e) => setComplaintMobile(e.target.value)}
+                        />
+                        <Phone className="absolute left-4 top-4 text-slate-300 w-4 h-4" />
+                      </div>
+                      </br>
+                      
+                    <textarea 
+                      required
+                      placeholder="আপনার সমস্যা বা অভিযোগ বিস্তারিত লিখুন..."
+                      className="w-full min-h-[120px] p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl focus:border-blue-500 outline-none transition-all font-medium text-slate-700"
+                      value={complaintText}
+                      onChange={(e) => setComplaintText(e.target.value)}
+                    />
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingComplaint || !complaintText.trim()}
+                      className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center space-x-3 disabled:opacity-50"
+                    >
+                      {isSubmittingComplaint ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+                        <>
+                          <Send className="w-5 h-5" />
+                          <span>সাবমিট করুন</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-wider mt-2">
+                      * মোবাইল অথবা ইমেইল যেকোনো একটি দেওয়া বাধ্যতামূলক
+                    </p>
+                  </form>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Verification Modal */}
@@ -447,7 +561,7 @@ const App: React.FC = () => {
                       type="tel" 
                       required
                       className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-slate-800 placeholder:text-slate-300"
-                      placeholder="০১৭XXXXXXXX"
+                      placeholder="০১6XXXXXXXX"
                       value={tempMobile}
                       onChange={e => setTempMobile(e.target.value)}
                     />
@@ -518,7 +632,7 @@ const App: React.FC = () => {
       {/* Visitor Profile Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-500 relative">
+          <div className="bg-white w-full max-sm rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-500 relative">
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 h-28 w-full relative">
                <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px]"></div>
             </div>
@@ -578,7 +692,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <footer className="bg-white border-t border-slate-200 mt-20 py-12">
+      <footer className="bg-white border-t border-slate-200 py-12">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <div className="flex items-center justify-center space-x-2 mb-6 cursor-pointer group" onClick={() => handleNavigate('home')}>
             <div className="bg-blue-600 p-1.5 rounded-lg group-hover:scale-110 transition-transform"><BookOpen className="text-white w-5 h-5" /></div>
