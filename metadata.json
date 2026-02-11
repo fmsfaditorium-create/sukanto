@@ -1,0 +1,8 @@
+{
+  "name": "শিক্ষক (Shikkhok) - English Learning Hub",
+  "description": "An educational platform for English grammar, paragraphs, and essays with an integrated AI tutor.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
